@@ -21,6 +21,7 @@ pub fn task(_: TokenStream, input: TokenStream) -> TokenStream {
             let field_name = named.iter().map(|field| &field.ident);
             let field_type = named.iter().map(|field| &field.ty);
             quote! {
+                #[derive(Clone)]
                 pub struct #name {
                     #(
                         #field_name: #field_type,
@@ -32,6 +33,7 @@ pub fn task(_: TokenStream, input: TokenStream) -> TokenStream {
             }
         }
         None => quote! {
+            #[derive(Clone)]
             pub struct #name {
                 message: MessageRepr,
                 status: Status,
