@@ -5,23 +5,42 @@ extern crate syn;
 
 use proc_macro::TokenStream;
 
-#[proc_macro_derive(Task)]
-pub fn entry_point_path_derive(input: TokenStream) -> TokenStream {
-    let ast = syn::parse(input).unwrap();
-    impl_entry_point_path(&ast)
-}
+use syn::{Data, DataStruct, DeriveInput, Fields};
 
-fn impl_entry_point_path(ast: &syn::DeriveInput) -> TokenStream {
+#[proc_macro_attribute]
+pub fn task(_: TokenStream, input: TokenStream) -> TokenStream {
+    let ast: DeriveInput = syn::parse(input).unwrap();
+
     let name = &ast.ident;
-    let gen = quote! {
-        impl TaskInfo for #name {
-            fn new(message: &MessageRepr, result: Option<ResultRepr>) -> Self {
-                Self {
-                    message: message.clone(),
-                    result: result.unwrap_or(ResultRepr::from(message)),
-                    status: Status::Pending,
+    let fields = match &ast.data {
+        Data::Struct(DataStruct { fields: Fields::Named(fields), .. }) => Some(&fields.named),
+        _ => None,
+    };
+    let mut stream = match fields {
+        Some(named) => {
+            let field_name = named.iter().map(|field| &field.ident);
+            let field_type = named.iter().map(|field| &field.ty);
+            quote! {
+                pub struct #name {
+                    #(
+                        #field_name: #field_type,
+                    )*
+                    message: MessageRepr,
+                    status: Status,
+                    result: ResultRepr,
                 }
             }
+        }
+        None => quote! {
+            pub struct #name {
+                message: MessageRepr,
+                status: Status,
+                result: ResultRepr,
+            }
+        }
+    };
+    stream.extend(quote! {
+        impl TaskInfo for #name {
             fn path() -> String {
                 format!("{}.{}", module_path!(), stringify!(#name))
             }
@@ -32,6 +51,6 @@ fn impl_entry_point_path(ast: &syn::DeriveInput) -> TokenStream {
             fn result(&self) -> ResultRepr { self.result.clone() }
             fn result_mut(&mut self) -> &mut ResultRepr { &mut self.result }
         }
-    };
-    gen.into()
+    });
+    stream.into()
 }
